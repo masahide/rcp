@@ -1,4 +1,4 @@
-package main
+package rcp
 
 import (
 	"context"
@@ -14,30 +14,39 @@ import (
 )
 
 var (
-	maxBufNum  = 10 * 1024
-	bufSize    = 10 * 1024 * 1024 // 10MByte
+/*
 	dialAddr   = ""
 	output     = ""
 	input      = ""
-	thread     = false
 	discard    = false
 	listenAddr = "0.0.0.0:1987"
-	copyFunc   = map[bool]func(io.Writer, io.Reader) (int64, error){
-		true:  bufCopy,
-		false: io.Copy,
-	}
+*/
 )
 
+// Rcp configs
+type Rcp struct {
+	MaxBufNum  int
+	BufSize    int
+	ThreadCopy bool
+	Discard    bool
+	DialAddr   string
+	Output     string
+	Input      string
+	ListenAddr string
+}
+
 func init() {
-	flag.IntVar(&maxBufNum, "maxBufNum", maxBufNum, "Maximum number of buffers (with thread copy mode)")
-	flag.IntVar(&bufSize, "bufsize", bufSize, "Buffer size(with thread copy mode)")
-	flag.StringVar(&dialAddr, "d", dialAddr, "dial address (ex: 198.51.100.1:1987 )")
-	flag.StringVar(&listenAddr, "l", listenAddr, "listen address")
-	flag.StringVar(&output, "o", output, "output filename")
-	flag.BoolVar(&discard, "discard", discard, "discard output")
-	flag.BoolVar(&thread, "t", thread, "thread copy mode")
-	flag.StringVar(&input, "i", input, "input filename")
-	flag.Parse()
+	/*
+		flag.IntVar(&maxBufNum, "maxBufNum", maxBufNum, "Maximum number of buffers (with thread copy mode)")
+		flag.IntVar(&bufSize, "bufsize", bufSize, "Buffer size(with thread copy mode)")
+		flag.StringVar(&dialAddr, "d", dialAddr, "dial address (ex: 198.51.100.1:1987 )")
+		flag.StringVar(&listenAddr, "l", listenAddr, "listen address")
+		flag.StringVar(&output, "o", output, "output filename")
+		flag.BoolVar(&discard, "discard", discard, "discard output")
+		flag.BoolVar(&thread, "t", thread, "thread copy mode")
+		flag.StringVar(&input, "i", input, "input filename")
+		flag.Parse()
+	*/
 
 }
 
@@ -46,14 +55,15 @@ func main() {
 		t    time.Duration
 		size int64
 		err  error
+		rcp  *Rcp
 	)
 	switch {
-	case len(dialAddr) > 0:
-		t, size, err = send(input, dialAddr)
-	case len(output) > 0:
-		t, size, err = receiveFile(listenAddr, output)
-	case discard:
-		t, size, err = receive(listenAddr, ioutil.Discard)
+	case len(rcp.DialAddr) > 0:
+		t, size, err = rcp.send(rcp.Input, rcp.DialAddr)
+	case len(rcp.Output) > 0:
+		t, size, err = rcp.receiveFile(rcp.ListenAddr, rcp.Output)
+	case rcp.Discard:
+		t, size, err = rcp.receive(rcp.ListenAddr, ioutil.Discard)
 	default:
 		flag.PrintDefaults()
 		return
@@ -68,7 +78,7 @@ func main() {
 	fmt.Fprintf(os.Stderr, "%.4f GByte/sec (%.4f Gbit/sec)\n", float64(size)/t.Seconds()/1024/1024/1024, float64(size)*8/t.Seconds()/1024/1024/1024)
 }
 
-func send(from, to string) (t time.Duration, size int64, err error) {
+func (rcp *Rcp) send(from, to string) (t time.Duration, size int64, err error) {
 	var conn net.Conn
 	conn, err = net.Dial("tcp", to)
 	if err != nil {
@@ -81,20 +91,20 @@ func send(from, to string) (t time.Duration, size int64, err error) {
 		return
 	}
 	defer file.Close()
-	return copy(conn, file)
+	return rcp.copy(conn, file)
 }
 
-func receiveFile(listen, filename string) (t time.Duration, size int64, err error) {
+func (rcp *Rcp) receiveFile(listen, filename string) (t time.Duration, size int64, err error) {
 	var file *os.File
 	file, err = os.Create(filename)
 	if err != nil {
 		return
 	}
 	defer file.Close()
-	return receive(listen, file)
+	return rcp.receive(listen, file)
 }
 
-func receive(listen string, w io.Writer) (t time.Duration, size int64, err error) {
+func (rcp *Rcp) receive(listen string, w io.Writer) (t time.Duration, size int64, err error) {
 	var ln net.Listener
 	ln, err = net.Listen("tcp", listen)
 	if err != nil {
@@ -108,12 +118,15 @@ func receive(listen string, w io.Writer) (t time.Duration, size int64, err error
 		return
 	}
 	defer conn.Close()
-	return copy(w, conn)
+	return rcp.copy(w, conn)
 }
 
-func copy(w io.Writer, r io.Reader) (time.Duration, int64, error) {
+func (rcp *Rcp) copy(w io.Writer, r io.Reader) (time.Duration, int64, error) {
 	now := time.Now()
-	c, err := copyFunc[thread](w, r)
+	c, err := map[bool]func(io.Writer, io.Reader) (int64, error){
+		true:  rcp.bufCopy,
+		false: io.Copy,
+	}[rcp.ThreadCopy](w, r)
 	t := time.Since(now)
 	return t, c, err
 }
@@ -123,13 +136,17 @@ type buffers struct {
 	pool  sync.Pool
 }
 
-func newBuffers(n int) *buffers {
+func newBuffers(size, n int) *buffers {
 	bs := buffers{}
 	bs.limit = make(chan struct{}, n)
 	bs.pool = sync.Pool{New: func() interface{} {
-		return make([]byte, bufSize)
+		return make([]byte, size)
 	}}
 	return &bs
+}
+
+func (bs *buffers) Len() int {
+	return len(bs.limit)
 }
 
 func (bs *buffers) Get() []byte {
@@ -154,11 +171,11 @@ type result struct {
 	err  error
 }
 
-func bufCopy(w io.Writer, r io.Reader) (int64, error) {
+func (rcp *Rcp) bufCopy(w io.Writer, r io.Reader) (int64, error) {
 	tc := &threadCopy{
 		w:     w,
 		r:     r,
-		bs:    newBuffers(maxBufNum),
+		bs:    newBuffers(rcp.BufSize, rcp.MaxBufNum),
 		queue: make(chan []byte),
 	}
 	ctx := context.Background()
@@ -180,27 +197,23 @@ func bufCopy(w io.Writer, r io.Reader) (int64, error) {
 }
 
 func (tc *threadCopy) readWorker(ctx context.Context, res chan result) {
-	defer close(tc.queue)
-	eof := false
 	size := int64(0)
+	var err error
+	defer close(tc.queue)
+	defer func() { res <- result{int64(size), err} }()
 	for {
+		var c int
 		buf := tc.bs.Get()
-		c, err := tc.r.Read(buf)
+		c, err = tc.r.Read(buf)
 		size += int64(c)
-		if err != nil {
-			if err != io.EOF {
-				res <- result{int64(size), err}
-				return
-			}
-			eof = true
+		if err != nil && err != io.EOF {
+			return
 		}
 		select {
 		case <-ctx.Done():
-			res <- result{int64(size), ctx.Err()}
 			return
 		case tc.queue <- buf[:c]:
-			if eof {
-				res <- result{int64(size), nil}
+			if err == io.EOF {
 				return
 			}
 		}
@@ -209,19 +222,18 @@ func (tc *threadCopy) readWorker(ctx context.Context, res chan result) {
 
 func (tc *threadCopy) writeWorker(ctx context.Context, res chan result) {
 	size := int64(0)
+	var err error
+	defer func() { res <- result{size, err} }()
 	for {
 		select {
 		case <-ctx.Done():
-			res <- result{size, ctx.Err()}
 			return
 		case buf, ok := <-tc.queue:
 			if !ok {
-				res <- result{size, nil}
 				return
 			}
-			c, err := tc.w.Write(buf)
-			if err != nil {
-				res <- result{size, err}
+			var c int
+			if c, err = tc.w.Write(buf); err != nil {
 				return
 			}
 			tc.bs.Put(buf)
