@@ -31,6 +31,7 @@ func (t *tui) TerminalDimensions() (int, int) { return ui.TerminalDimensions() }
 func (t *tui) Render(items ...ui.Drawable)    { ui.Render(items...) }
 func (t *tui) PollEvents() <-chan ui.Event    { return ui.PollEvents() }
 
+/*
 type dummyui struct{}
 
 func (t *dummyui) Init() error                    { return nil }
@@ -38,6 +39,7 @@ func (t *dummyui) Close()                         {}
 func (t *dummyui) TerminalDimensions() (int, int) { return 10, 10 }
 func (t *dummyui) Render(items ...ui.Drawable)    {}
 func (t *dummyui) PollEvents() <-chan ui.Event    { return make(chan ui.Event) }
+*/
 
 // SpeedDashboard status dash board
 type SpeedDashboard struct {

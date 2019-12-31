@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 )
 
 type reciveStream struct {
@@ -31,10 +30,6 @@ func (rs *reciveStream) Close() error {
 	}
 	return rs.ln.Close()
 }
-
-func fileReadOpen(name string) (io.ReadCloser, error)   { return os.Open(name) }
-func fileWriteOpen(name string) (io.WriteCloser, error) { return os.Create(name) }
-func dialWriteOpen(name string) (io.WriteCloser, error) { return net.Dial("tcp", name) }
 
 type dummyStream struct {
 	size int64

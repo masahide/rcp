@@ -3,6 +3,7 @@ package rcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -111,7 +112,8 @@ func newBuffers(size, n int) *buffers {
 	bs := buffers{}
 	bs.limit = make(chan struct{}, n)
 	bs.pool = sync.Pool{New: func() interface{} {
-		return make([]byte, size)
+		buf := make([]byte, size)
+		return &buf
 	}}
 	return &bs
 }
@@ -120,18 +122,18 @@ func (bs *buffers) Len() int {
 	return len(bs.limit)
 }
 
-func (bs *buffers) Get() []byte {
+func (bs *buffers) Get() *[]byte {
 	bs.limit <- struct{}{} // 空くまで待つ
-	return bs.pool.Get().([]byte)
+	return bs.pool.Get().(*[]byte)
 }
 
-func (bs *buffers) Put(b []byte) {
+func (bs *buffers) Put(b *[]byte) {
 	bs.pool.Put(b)
 	<-bs.limit // 解放
 }
 
 type threadCopy struct {
-	queue   chan []byte
+	queue   chan *[]byte
 	bufSize int
 	bs      *buffers
 	r       io.Reader
@@ -153,7 +155,7 @@ func (rcp *Rcp) bufCopy(w io.Writer, r io.Reader) (int64, error) {
 		r:       r,
 		bufSize: rcp.BufSize,
 		bs:      newBuffers(rcp.BufSize, rcp.MaxBufNum),
-		queue:   make(chan []byte, rcp.MaxBufNum),
+		queue:   make(chan *[]byte, rcp.MaxBufNum),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	rResChan := make(chan result)
@@ -167,7 +169,13 @@ func (rcp *Rcp) bufCopy(w io.Writer, r io.Reader) (int64, error) {
 	mctx, mCancel := context.WithCancel(ctx)
 	wg.Add(2)
 	go func() { tc.monitorWorker(mctx, rcp.Ch); wg.Done() }()
-	go func() { rcp.SpeedDashboard.Run(mctx); wg.Done(); cancel() }()
+	go func() {
+		if err := rcp.SpeedDashboard.Run(mctx); err != nil {
+			fmt.Fprintf(os.Stderr, "SpeedDashboard.Run err: %s", err)
+		}
+		wg.Done()
+		cancel()
+	}()
 	rRes := <-rResChan
 	wRes := <-wResChan
 	mCancel()
@@ -188,15 +196,16 @@ func (tc *threadCopy) readWorker(ctx context.Context, res chan result) {
 	for {
 		var c int
 		buf := tc.bs.Get()
-		c, err = tc.r.Read(buf)
+		c, err = tc.r.Read(*buf)
 		size += uint64(c)
 		if err != nil && err != io.EOF {
 			return
 		}
+		*buf = (*buf)[:c]
 		select {
 		case <-ctx.Done():
 			return
-		case tc.queue <- buf[:c]:
+		case tc.queue <- buf:
 			atomic.AddUint64(&tc.inputBytes, uint64(c))
 			if err == io.EOF {
 				return
@@ -218,7 +227,7 @@ func (tc *threadCopy) writeWorker(ctx context.Context, res chan result) {
 				return
 			}
 			var c int
-			if c, err = tc.w.Write(buf); err != nil {
+			if c, err = tc.w.Write(*buf); err != nil {
 				return
 			}
 			atomic.AddUint64(&tc.outputBytes, uint64(c))

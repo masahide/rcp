@@ -28,9 +28,7 @@ import (
 )
 
 var (
-	cfgFile   = ""
-	maxBufNum = 10 * 1024
-	bufSize   = 10 * 1024 * 1024 // 10MByte
+	cfgFile = ""
 	// Rcp configs
 	r = &rcp.Rcp{
 		MaxBufNum:    100,
