@@ -18,6 +18,7 @@ limitations under the License.
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/spf13/cobra"
 )
@@ -34,6 +35,14 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("send called")
+		_, err := r.ReadWrite()
+		if err != nil {
+			log.Println(err)
+		}
+		fmt.Println(r.SpeedDashboard.Input.Title)
+		fmt.Println(r.SpeedDashboard.Output.Title)
+		fmt.Println(r.SpeedDashboard.Buffer.Title)
+		fmt.Println(r.SpeedDashboard.Progress.Title)
 	},
 }
 
@@ -45,6 +54,10 @@ func init() {
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
 	// sendCmd.PersistentFlags().String("foo", "", "A help for foo")
+	sendCmd.PersistentFlags().StringVarP(&r.Input, "input", "i", r.Input, "input filename")
+	sendCmd.PersistentFlags().StringVarP(&r.DialAddr, "dialAddr", "d", r.DialAddr, "dial address (ex: 198.51.100.1:1987 )")
+	sendCmd.PersistentFlags().Int64Var(&r.DummyInput, "dummyInput", r.DummyInput, "dummy input mode data size")
+	sendCmd.PersistentFlags().BoolVar(&r.DummyOutput, "dummyOutput", r.DummyOutput, "dummy output mode")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:

@@ -2,133 +2,104 @@ package rcp
 
 import (
 	"context"
-	"flag"
-	"fmt"
+	"errors"
 	"io"
-	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
-)
-
-var (
-/*
-	dialAddr   = ""
-	output     = ""
-	input      = ""
-	discard    = false
-	listenAddr = "0.0.0.0:1987"
-*/
 )
 
 // Rcp configs
 type Rcp struct {
-	MaxBufNum  int
-	BufSize    int
-	ThreadCopy bool
-	Discard    bool
-	DialAddr   string
-	Output     string
-	Input      string
-	ListenAddr string
+	MaxBufNum    int
+	BufSize      int
+	SingleThread bool
+	DummyInput   int64
+	DummyOutput  bool
+	DialAddr     string
+	Output       string
+	Input        string
+	ListenAddr   string
+	*SpeedDashboard
 }
 
-func init() {
-	/*
-		flag.IntVar(&maxBufNum, "maxBufNum", maxBufNum, "Maximum number of buffers (with thread copy mode)")
-		flag.IntVar(&bufSize, "bufsize", bufSize, "Buffer size(with thread copy mode)")
-		flag.StringVar(&dialAddr, "d", dialAddr, "dial address (ex: 198.51.100.1:1987 )")
-		flag.StringVar(&listenAddr, "l", listenAddr, "listen address")
-		flag.StringVar(&output, "o", output, "output filename")
-		flag.BoolVar(&discard, "discard", discard, "discard output")
-		flag.BoolVar(&thread, "t", thread, "thread copy mode")
-		flag.StringVar(&input, "i", input, "input filename")
-		flag.Parse()
-	*/
+// ErrInput  error type of source is not specified
+var ErrInput = errors.New("The source is not specified")
 
-}
+// ErrOutput error type of destination is not specified
+var ErrOutput = errors.New("The destination is not specified")
 
-func main() {
-	var (
-		t    time.Duration
-		size int64
-		err  error
-		rcp  *Rcp
-	)
+func (rcp *Rcp) openReader() (r io.ReadCloser, err error) {
 	switch {
-	case len(rcp.DialAddr) > 0:
-		t, size, err = rcp.send(rcp.Input, rcp.DialAddr)
-	case len(rcp.Output) > 0:
-		t, size, err = rcp.receiveFile(rcp.ListenAddr, rcp.Output)
-	case rcp.Discard:
-		t, size, err = rcp.receive(rcp.ListenAddr, ioutil.Discard)
+	case rcp.DummyInput > 0:
+		r = openDummyRead(rcp.DummyInput)
+		rcp.InputName = "dummy input"
+		rcp.TotalSize = rcp.DummyInput
+	case len(rcp.Input) > 0:
+		var f *os.File
+		if f, err = os.Open(rcp.Input); err != nil {
+			return
+		}
+		rcp.InputName = rcp.Input
+		var fi os.FileInfo
+		if fi, err = f.Stat(); err != nil {
+			return
+		}
+		r = f
+		rcp.TotalSize = fi.Size()
+	case len(rcp.ListenAddr) > 0:
+		if r, err = reciveStreamOpen(rcp.ListenAddr); err != nil {
+			return
+		}
+		rcp.InputName = rcp.ListenAddr
 	default:
-		flag.PrintDefaults()
-		return
+		return r, ErrInput
 	}
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Fprintf(os.Stderr, "time:  %v\n", t)
-	fmt.Fprintf(os.Stderr, "size:  %v\n", size)
-	fmt.Fprintf(os.Stderr, "%.0f Byte/sec  (%.0f bit/sec)\n", float64(size)/t.Seconds(), float64(size)*8/t.Seconds())
-	fmt.Fprintf(os.Stderr, "%.4f MByte/sec (%.4f Mbit/sec)\n", float64(size)/t.Seconds()/1024/1024, float64(size)*8/t.Seconds()/1024/1024)
-	fmt.Fprintf(os.Stderr, "%.4f GByte/sec (%.4f Gbit/sec)\n", float64(size)/t.Seconds()/1024/1024/1024, float64(size)*8/t.Seconds()/1024/1024/1024)
+	return
 }
 
-func (rcp *Rcp) send(from, to string) (t time.Duration, size int64, err error) {
-	var conn net.Conn
-	conn, err = net.Dial("tcp", to)
-	if err != nil {
-		return
+func (rcp *Rcp) openWriter() (w io.WriteCloser, err error) {
+	switch {
+	case rcp.DummyOutput:
+		w = openDummyWrite()
+		rcp.OutputName = "dummy output"
+	case len(rcp.Output) > 0:
+		if w, err = os.Create(rcp.Output); err != nil {
+			return
+		}
+		rcp.OutputName = rcp.Output
+	case len(rcp.DialAddr) > 0:
+		if w, err = net.Dial("tcp", rcp.DialAddr); err != nil {
+			return
+		}
+		rcp.OutputName = rcp.DialAddr
+	default:
+		return w, ErrOutput
 	}
-	defer conn.Close()
-	var file *os.File
-	file, err = os.Open(from)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	return rcp.copy(conn, file)
+	return
 }
 
-func (rcp *Rcp) receiveFile(listen, filename string) (t time.Duration, size int64, err error) {
-	var file *os.File
-	file, err = os.Create(filename)
+// ReadWrite mode
+func (rcp *Rcp) ReadWrite() (size int64, err error) {
+	var w io.WriteCloser
+	var r io.ReadCloser
+	rcp.SpeedDashboard = NewSpeedDashboard()
+	r, err = rcp.openReader()
 	if err != nil {
 		return
 	}
-	defer file.Close()
-	return rcp.receive(listen, file)
-}
-
-func (rcp *Rcp) receive(listen string, w io.Writer) (t time.Duration, size int64, err error) {
-	var ln net.Listener
-	ln, err = net.Listen("tcp", listen)
+	defer r.Close()
+	w, err = rcp.openWriter()
 	if err != nil {
 		return
 	}
-	defer ln.Close()
-	fmt.Printf("Listen: %s\n", listen)
-	var conn net.Conn
-	conn, err = ln.Accept()
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-	return rcp.copy(w, conn)
-}
-
-func (rcp *Rcp) copy(w io.Writer, r io.Reader) (time.Duration, int64, error) {
-	now := time.Now()
-	c, err := map[bool]func(io.Writer, io.Reader) (int64, error){
-		true:  rcp.bufCopy,
-		false: io.Copy,
-	}[rcp.ThreadCopy](w, r)
-	t := time.Since(now)
-	return t, c, err
+	defer w.Close()
+	return map[bool]func(io.Writer, io.Reader) (int64, error){
+		true:  io.Copy,
+		false: rcp.bufCopy,
+	}[rcp.SingleThread](w, r)
 }
 
 type buffers struct {
@@ -160,52 +131,65 @@ func (bs *buffers) Put(b []byte) {
 }
 
 type threadCopy struct {
-	queue chan []byte
-	bs    *buffers
-	r     io.Reader
-	w     io.Writer
+	queue   chan []byte
+	bufSize int
+	bs      *buffers
+	r       io.Reader
+	w       io.Writer
+
+	// atomic counter
+	inputBytes  uint64
+	outputBytes uint64
 }
 
 type result struct {
-	size int64
+	size uint64
 	err  error
 }
 
 func (rcp *Rcp) bufCopy(w io.Writer, r io.Reader) (int64, error) {
 	tc := &threadCopy{
-		w:     w,
-		r:     r,
-		bs:    newBuffers(rcp.BufSize, rcp.MaxBufNum),
-		queue: make(chan []byte),
+		w:       w,
+		r:       r,
+		bufSize: rcp.BufSize,
+		bs:      newBuffers(rcp.BufSize, rcp.MaxBufNum),
+		queue:   make(chan []byte, rcp.MaxBufNum),
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	rResChan := make(chan result)
 	wResChan := make(chan result)
-	go tc.readWorker(ctx, rResChan)
-	go tc.writeWorker(ctx, wResChan)
+	var wg sync.WaitGroup
+	defer func() { cancel(); wg.Wait() }()
+	wg.Add(2)
+	go func() { tc.readWorker(ctx, rResChan); wg.Done() }()
+	go func() { tc.writeWorker(ctx, wResChan); wg.Done() }()
+
+	mctx, mCancel := context.WithCancel(ctx)
+	wg.Add(2)
+	go func() { tc.monitorWorker(mctx, rcp.Ch); wg.Done() }()
+	go func() { rcp.SpeedDashboard.Run(mctx); wg.Done(); cancel() }()
 	rRes := <-rResChan
-	if rRes.err != nil {
-		log.Fatal(rRes.err)
-	}
 	wRes := <-wResChan
-	if wRes.err != nil {
-		log.Fatal(wRes.err)
+	mCancel()
+	if rRes.err != nil && rRes.err != io.EOF {
+		return int64(rRes.size), rRes.err
 	}
-	close(rResChan)
-	close(wResChan)
-	return wRes.size, nil
+	if wRes.err != nil && wRes.err != io.EOF {
+		return int64(wRes.size), wRes.err
+	}
+	return int64(wRes.size), nil
 }
 
 func (tc *threadCopy) readWorker(ctx context.Context, res chan result) {
-	size := int64(0)
+	size := uint64(0)
 	var err error
 	defer close(tc.queue)
-	defer func() { res <- result{int64(size), err} }()
+	defer func() { res <- result{size, err}; close(res) }()
 	for {
 		var c int
 		buf := tc.bs.Get()
 		c, err = tc.r.Read(buf)
-		size += int64(c)
+		size += uint64(c)
 		if err != nil && err != io.EOF {
 			return
 		}
@@ -213,6 +197,7 @@ func (tc *threadCopy) readWorker(ctx context.Context, res chan result) {
 		case <-ctx.Done():
 			return
 		case tc.queue <- buf[:c]:
+			atomic.AddUint64(&tc.inputBytes, uint64(c))
 			if err == io.EOF {
 				return
 			}
@@ -221,9 +206,9 @@ func (tc *threadCopy) readWorker(ctx context.Context, res chan result) {
 }
 
 func (tc *threadCopy) writeWorker(ctx context.Context, res chan result) {
-	size := int64(0)
+	size := uint64(0)
 	var err error
-	defer func() { res <- result{size, err} }()
+	defer func() { res <- result{size, err}; close(res) }()
 	for {
 		select {
 		case <-ctx.Done():
@@ -236,8 +221,56 @@ func (tc *threadCopy) writeWorker(ctx context.Context, res chan result) {
 			if c, err = tc.w.Write(buf); err != nil {
 				return
 			}
+			atomic.AddUint64(&tc.outputBytes, uint64(c))
 			tc.bs.Put(buf)
-			size += int64(c)
+			size += uint64(c)
+		}
+	}
+}
+
+func (tc *threadCopy) monitorWorker(ctx context.Context, ch chan<- Metrics) {
+	start := time.Now()
+	prevTime := start
+	oldInputBytes := uint64(0)
+	oldOutputBytes := uint64(0)
+	m := Metrics{}
+	speedCalcFunc := func(t time.Time) {
+		dur := t.Sub(start)
+		inputBytes := atomic.LoadUint64(&tc.inputBytes)
+		outputBytes := atomic.LoadUint64(&tc.outputBytes)
+		m.Size = uint64(outputBytes)
+		m.AvgByteSec = uint64(float64(outputBytes) / dur.Seconds())
+		m.InputByteSec = uint64(float64(inputBytes-oldInputBytes) / t.Sub(prevTime).Seconds())
+		if m.InputMaxByteSec < m.InputByteSec {
+			m.InputMaxByteSec = m.InputByteSec
+		}
+		oldInputBytes = inputBytes
+		m.OutputByteSec = uint64(float64(outputBytes-oldOutputBytes) / t.Sub(prevTime).Seconds())
+		if m.OutputMaxByteSec < m.OutputByteSec {
+			m.OutputMaxByteSec = m.OutputByteSec
+		}
+		oldOutputBytes = outputBytes
+		m.BufferUsed = uint64(len(tc.queue) * tc.bufSize)
+		if m.BufferMaxUsed < m.BufferUsed {
+			m.BufferMaxUsed = m.BufferUsed
+		}
+		prevTime = t
+	}
+	postFunc := func() {
+		select {
+		case ch <- m:
+		case <-ctx.Done():
+		}
+	}
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case t := <-ticker.C:
+			speedCalcFunc(t)
+			postFunc()
 		}
 	}
 }

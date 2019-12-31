@@ -18,6 +18,7 @@ limitations under the License.
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/spf13/cobra"
 )
@@ -32,7 +33,14 @@ example:
 $ rcp listen -a 0.0.0.0:1987 -o outputfile
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("listen called")
+		_, err := r.ReadWrite()
+		if err != nil {
+			log.Println(err)
+		}
+		fmt.Println(r.SpeedDashboard.Input.Title)
+		fmt.Println(r.SpeedDashboard.Output.Title)
+		fmt.Println(r.SpeedDashboard.Buffer.Title)
+		fmt.Println(r.SpeedDashboard.Progress.Title)
 	},
 }
 
@@ -49,7 +57,11 @@ func init() {
 	// is called directly, e.g.:
 	// listenCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", cfgFile, "config file (default is $HOME/.cobra.yaml)")
+	listenCmd.PersistentFlags().StringVarP(&r.ListenAddr, "listenAddr", "l", r.ListenAddr, "listen address")
+	listenCmd.PersistentFlags().StringVarP(&r.Output, "output", "o", r.Output, "output filename")
+	listenCmd.PersistentFlags().Int64Var(&r.DummyInput, "dummyInput", r.DummyInput, "dummy input mode data size")
+	listenCmd.PersistentFlags().BoolVar(&r.DummyOutput, "dummyOutput", r.DummyOutput, "dummy output mode")
+	//flag.BoolVar(&discard, "discard", discard, "discard output")
+	//flag.StringVar(&input, "i", input, "input filename")
 
-	listenCmd.PersistentFlags().String("foo", "", "A help for foo")
 }

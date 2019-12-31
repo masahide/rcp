@@ -10,6 +10,10 @@ import (
 	"github.com/gizak/termui/v3/widgets"
 )
 
+const (
+	chanSize = 10
+)
+
 // UIIface ui interface
 type UIIface interface {
 	Init() error
@@ -56,7 +60,7 @@ type SpeedDashboard struct {
 
 //Metrics progres metrics
 type Metrics struct {
-	Size             int64
+	Size             uint64
 	AvgByteSec       uint64
 	InputByteSec     uint64
 	InputMaxByteSec  uint64
@@ -66,67 +70,26 @@ type Metrics struct {
 	BufferMaxUsed    uint64
 }
 
-/*
-func main() {
-	logfile, err := os.Create("log")
-	if err != nil {
-		log.Println(err)
-	}
-	log.SetOutput(logfile)
-	s := NewSpeedDashboard()
-	s.TotalSize = int64(4096 * 100)
-	s.InputName = "/tmp/hoge"
-	s.OutputName = "192.168.0.1:1987"
-	ctx := context.Background()
-	go putMetrics(ctx, s.Ch)
-	s.Run(ctx)
-}
-
-func putMetrics(ctx context.Context, ch chan<- Metrics) {
-
-	sendMetrics := func(count int) {
-		var m Metrics
-		m.Size = 4096 * int64(count) //int64(math.Pow(float64(count), 2))
-		m.AvgByteSec = uint64(math.Pow(float64(count), 2))
-		m.InputByteSec = uint64(math.Pow(float64(count), 2))
-		m.InputMaxByteSec = m.InputByteSec
-		m.OutputByteSec = uint64(math.Pow(float64(count), 2))
-		m.OutputMaxByteSec = m.OutputByteSec
-		m.BufferUsed = uint64(math.Pow(float64(count), 1.5))
-		m.BufferMaxUsed = m.BufferUsed
-		select {
-		case ch <- m:
-		case <-ctx.Done():
-		}
-	}
-	tickerCount := 0
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		tickerCount++
-		sendMetrics(tickerCount)
-		select {
-		case <-ticker.C:
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-*/
-
 func (s *SpeedDashboard) updateTitle() {
-	s.Progress.Title = fmt.Sprintf("Progress:[%s / %s Byte], Average speed:[%syte/Sec]",
-		humanize.Comma(s.Size), humanize.Comma(s.TotalSize), humanize.Bytes(s.AvgByteSec))
-	s.Input.Title = fmt.Sprintf("input [%s] %syte/sec (max: %syte/sec)",
+	s.Progress.Title = fmt.Sprintf("Progress:[%s / %s Byte], Average speed:[%syte/sec]",
+		humanize.Comma(int64(s.Size)), humanize.Comma(s.TotalSize), humanize.Bytes(s.AvgByteSec))
+	s.Input.Title = fmt.Sprintf("Input [%s] %syte/sec (max: %syte/sec)",
 		s.InputName, humanize.Bytes(s.InputByteSec), humanize.Bytes(s.InputMaxByteSec))
-	s.Output.Title = fmt.Sprintf("output [%s] %syte/sec (max: %syte/sec)",
+	s.Output.Title = fmt.Sprintf("Output [%s] %syte/sec (max: %syte/sec)",
 		s.OutputName, humanize.Bytes(s.OutputByteSec), humanize.Bytes(s.OutputMaxByteSec))
-	s.Buffer.Title = fmt.Sprintf("%syte (max: %syte)",
+	s.Buffer.Title = fmt.Sprintf("Buffer used: %syte (max: %syte)",
 		humanize.Bytes(s.BufferUsed), humanize.Bytes(s.BufferMaxUsed))
 }
 
+func percent(total int64, curr uint64) int {
+	if total == 0 {
+		return 0
+	}
+	return int(float64(curr) / float64(total) * 100)
+}
+
 func (s *SpeedDashboard) updateData() {
-	s.Progress.Percent = int(float64(s.Size) / float64(s.TotalSize) * 100)
+	s.Progress.Percent = percent(s.TotalSize, s.Size)
 	s.Buffer.Data = append(s.Buffer.Data, float64(s.BufferUsed))
 	s.Output.Data = append(s.Output.Data, float64(s.OutputByteSec))
 	s.Input.Data = append(s.Input.Data, float64(s.InputByteSec))
@@ -150,24 +113,20 @@ func NewSpeedDashboard() *SpeedDashboard {
 	s.Title.TextStyle.Fg = ui.ColorWhite
 	s.Title.Border = false
 
-	//s.Progress.Title = "Progress (xxxxx / 10000 Byte)"
 	s.Progress.Percent = 0
 	s.Progress.BarColor = ui.ColorGreen
 	s.Progress.BorderStyle.Fg = ui.ColorWhite
 	s.Progress.TitleStyle.Fg = ui.ColorCyan
 
-	//s.Input.Title = "input [file:xxxxx] xxx Byte/sec (max: xxx Byte/sec)"
 	s.Input.LineColor = ui.ColorGreen
 	s.Input.Data = []float64{0}
 
-	//s.Output.Title = "output [0.0.0.0:1987] xxx Byte/sec (max: xxx Byte/sec)"
 	s.Output.LineColor = ui.ColorRed
 	s.Output.Data = []float64{0}
 
 	s.Speeds = widgets.NewSparklineGroup(s.Input, s.Output)
 	s.Speeds.Title = "Speed"
 
-	//s.Buffer.Title = "xxx Byte (max: xxx Byte)"
 	s.Buffer.LineColor = ui.ColorYellow
 	s.Buffer.Data = []float64{0}
 
@@ -193,9 +152,10 @@ func (s *SpeedDashboard) resize() {
 }
 
 func resizeData(data []float64, tw int) []float64 {
-	if len(data) > tw+2 {
-		s := len(data) - tw + 2
-		data = data[s:]
+	s := len(data)
+	if s > tw-2 {
+		s -= tw - 2
+		return data[s:]
 	}
 	return data
 }

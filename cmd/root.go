@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/masahide/rcp/pkg/rcp"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )
@@ -30,6 +31,18 @@ var (
 	cfgFile   = ""
 	maxBufNum = 10 * 1024
 	bufSize   = 10 * 1024 * 1024 // 10MByte
+	// Rcp configs
+	r = &rcp.Rcp{
+		MaxBufNum:    100,
+		BufSize:      10 * 1024 * 1024, // 10MByte
+		SingleThread: false,
+		DummyInput:   0,
+		DummyOutput:  false,
+		DialAddr:     "",
+		Output:       "",
+		Input:        "",
+		ListenAddr:   "0.0.0.0:1987",
+	}
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -64,11 +77,12 @@ func init() {
 	// will be global for your application.
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", cfgFile, "config file (default is $HOME/.rcp.yaml)")
-	rootCmd.PersistentFlags().IntVar(&maxBufNum, "config", maxBufNum, "config file (default is $HOME/.cobra.yaml)")
-
+	rootCmd.PersistentFlags().IntVar(&r.MaxBufNum, "maxBufNum", r.MaxBufNum, "Maximum number of buffers (with thread copy mode)")
+	rootCmd.PersistentFlags().IntVar(&r.BufSize, "bufSize", r.BufSize, "Buffer size(with thread copy mode)")
+	rootCmd.PersistentFlags().BoolVarP(&r.SingleThread, "singlThread", "s", r.SingleThread, "Single thread mode")
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
 
 // initConfig reads in config file and ENV variables if set.
