@@ -23,6 +23,7 @@ type Rcp struct {
 	Output       string
 	Input        string
 	ListenAddr   string
+	Listan       string
 	*SpeedDashboard
 }
 
