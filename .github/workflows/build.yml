@@ -1,9 +1,9 @@
-name: Go
+name: golang build
 on: [push]
 jobs:
 
   build:
-    name: Build
+    name: Testing the build
     runs-on: ubuntu-latest
     steps:
 
