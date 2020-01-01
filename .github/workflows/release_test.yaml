@@ -1,0 +1,33 @@
+on: release
+name: build
+jobs:
+  linux-amd64:
+    name: linux-amd64
+    runs-on: ubuntu-latest
+    steps:
+    - name: build,gzip and release
+      uses: masahide/golang-release-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GOARCH: amd64
+        GOOS: linux
+  darwin-amd64:
+    name: darwin-amd64
+    runs-on: darwin-amd64
+    steps:
+    - name: build,gzip and release
+      uses: masahide/golang-release-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GOARCH: amd64
+        GOOS: darwin
+  windows-amd64:
+    name: windows-amd64
+    runs-on: windows-amd64
+    steps:
+    - name: build,gzip and release
+      uses: masahide/golang-release-action@master
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GOARCH: amd64
+        GOOS: windows
