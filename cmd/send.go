@@ -20,21 +20,23 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/masahide/rcp/pkg/bytesize"
 	"github.com/spf13/cobra"
 )
 
 // sendCmd represents the send command
 var sendCmd = &cobra.Command{
 	Use:   "send",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "Send files",
+	Long: `Send a file to a listening TCP port
+example:
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+$ rcp send -d 10.10.10.10:1987 -i input_filename`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("send called")
+		r.DummyInput = int64(bytesize.MustParse(dummyInputString))
+		if len(r.DialAddr) == 0 && r.DummyInput == 0 {
+			log.Fatal("--dialAddr(-d) flag or --dummyInput flag required")
+		}
 		_, err := r.ReadWrite()
 		if err != nil {
 			log.Println(err)
@@ -56,8 +58,6 @@ func init() {
 	// sendCmd.PersistentFlags().String("foo", "", "A help for foo")
 	sendCmd.PersistentFlags().StringVarP(&r.Input, "input", "i", r.Input, "input filename")
 	sendCmd.PersistentFlags().StringVarP(&r.DialAddr, "dialAddr", "d", r.DialAddr, "dial address (ex: 198.51.100.1:1987 )")
-	sendCmd.PersistentFlags().Int64Var(&r.DummyInput, "dummyInput", r.DummyInput, "dummy input mode data size")
-	sendCmd.PersistentFlags().BoolVar(&r.DummyOutput, "dummyOutput", r.DummyOutput, "dummy output mode")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:

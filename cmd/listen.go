@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/masahide/rcp/pkg/bytesize"
 	"github.com/spf13/cobra"
 )
 
@@ -30,9 +31,12 @@ var listenCmd = &cobra.Command{
 	Long: `Listen to the file receiving port command
 example:
 
-$ rcp listen -a 0.0.0.0:1987 -o outputfile
-`,
+$ rcp listen -l 0.0.0.0:1987 -o outputfile `,
 	Run: func(cmd *cobra.Command, args []string) {
+		r.DummyInput = int64(bytesize.MustParse(dummyInputString))
+		if len(r.Output) == 0 && !r.DummyOutput {
+			log.Fatal("--output(-o) flag or --dummyOutput flag required")
+		}
 		_, err := r.ReadWrite()
 		if err != nil {
 			log.Println(err)
@@ -59,8 +63,6 @@ func init() {
 
 	listenCmd.PersistentFlags().StringVarP(&r.ListenAddr, "listenAddr", "l", r.ListenAddr, "listen address")
 	listenCmd.PersistentFlags().StringVarP(&r.Output, "output", "o", r.Output, "output filename")
-	listenCmd.PersistentFlags().Int64Var(&r.DummyInput, "dummyInput", r.DummyInput, "dummy input mode data size")
-	listenCmd.PersistentFlags().BoolVar(&r.DummyOutput, "dummyOutput", r.DummyOutput, "dummy output mode")
 	//flag.BoolVar(&discard, "discard", discard, "discard output")
 	//flag.StringVar(&input, "i", input, "input filename")
 

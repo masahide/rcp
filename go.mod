@@ -6,6 +6,7 @@ require (
 	github.com/cheggaaa/pb/v3 v3.0.3
 	github.com/dustin/go-humanize v1.0.0
 	github.com/gizak/termui/v3 v3.1.0
+	github.com/inhies/go-bytesize v0.0.0-20151001220322-5990f52c6ad6
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.6.1

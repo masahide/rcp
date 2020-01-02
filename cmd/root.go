@@ -30,7 +30,8 @@ import (
 var (
 	cfgFile = ""
 	// Rcp configs
-	r = &rcp.Rcp{
+	dummyInputString string
+	r                = &rcp.Rcp{
 		MaxBufNum:    100,
 		BufSize:      10 * 1024 * 1024, // 10MByte
 		SingleThread: false,
@@ -46,13 +47,28 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "rcp",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Short: "Command for file transfer by tcp",
+	Long: `Command for file transfer by tcp.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+Characteristic:
+- Transfer files using buffer between file read / write and transfer process
+- Monitors read / write speed and transfer speed every second and displays them in sparkline chart
+- Network and storage performance can be measured with dummy data send and dummy receive functions
+
+The main procedure is performed in two steps:
+- Listen to any port number on the receiving side
+- Dial the destination port number on the sender
+
+Example of use:
+
+- Listen on TCP 1987 port on the receiving side
+
+$ rcp listen -l :1987 -o save_filename
+
+- Send file from sender
+
+$ rcp send -d 10.10.10.10:1987 -i input_filename`,
+
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	//	Run: func(cmd *cobra.Command, args []string) { },
@@ -78,6 +94,8 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&r.MaxBufNum, "maxBufNum", r.MaxBufNum, "Maximum number of buffers (with thread copy mode)")
 	rootCmd.PersistentFlags().IntVar(&r.BufSize, "bufSize", r.BufSize, "Buffer size(with thread copy mode)")
 	rootCmd.PersistentFlags().BoolVarP(&r.SingleThread, "singlThread", "s", r.SingleThread, "Single thread mode")
+	rootCmd.PersistentFlags().StringVar(&dummyInputString, "dummyInput", dummyInputString, "dummy input mode data size (ex: 100MB, 4K, 10g)")
+	rootCmd.PersistentFlags().BoolVar(&r.DummyOutput, "dummyOutput", r.DummyOutput, "dummy output mode")
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
