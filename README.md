@@ -16,6 +16,10 @@ Characteristic
 - Monitor read / write speed and transfer speed every second and display them in [Sparkline chart](https://images.app.goo.gl/f2adCQNKfWCG4ZJV8)
 - Network and storage performance can be measured with dummy data transmission and dummy reception functions
 
+download
+-----------
+
+[Release page] (https://github.com/masahide/rcp/releases) Select and download the one that matches your platform
 
 How to use
 ---------
