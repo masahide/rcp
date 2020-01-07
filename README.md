@@ -19,7 +19,7 @@ Characteristic
 download
 -----------
 
-[Release page] (https://github.com/masahide/rcp/releases) Select and download the one that matches your platform
+[Release page](https://github.com/masahide/rcp/releases) Select and download the one that matches your platform
 
 How to use
 ---------
