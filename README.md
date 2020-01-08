@@ -30,6 +30,47 @@ The main procedure is performed in the following two steps
 - Dial the destination port number on the sending side
 
 
+Usage of listen mode
+---------------------
+
+```
+Usage:
+  rcp listen [flags]
+
+Flags:
+  -h, --help                help for listen
+  -l, --listenAddr string   listen address (default "0.0.0.0:1987")
+  -o, --output string       output filename
+
+Global Flags:
+      --bufSize int         Buffer size (default 10485760)
+      --dummyInput string   dummy input mode data size (ex: 100MB, 4K, 10g)
+      --dummyOutput         dummy output mode
+      --maxBufNum int       Maximum number of buffers (default 100)
+```
+
+
+Usage of send mode
+---------------------
+
+```
+Usage:
+  rcp send [flags]
+
+Flags:
+  -d, --dialAddr string   dial address (ex: "198.51.100.1:1987" )
+  -h, --help              help for send
+  -i, --input string      input filename
+
+Global Flags:
+      --bufSize int         Buffer size (default 10485760)
+      --dummyInput string   dummy input mode data size (ex: 100MB, 4K, 10g)
+      --dummyOutput         dummy output mode
+      --maxBufNum int       Maximum number of buffers (default 100)
+```
+
+
+
 Example of use
 -----
 
