@@ -35,6 +35,47 @@ tcpによるファイル転送用のコマンド
 - 送信側で受信先のポート番号にdialする
 
 
+Listenモードの使用方法
+---------------------
+
+```
+Usage:
+  rcp listen [flags]
+
+Flags:
+  -h、--help         listenのヘルプ
+  -l、--listenAddr   リッスンアドレス（デフォルトは「0.0.0.0:1987」）
+  -o、--output       出力ファイル名
+
+Global Flags:
+      --bufSize      バッファサイズ（デフォルト 10485760）
+      --maxBufNum    バッファーの最大数（デフォルト100）
+      --dummyInput   文字列ダミー入力モードのデータサイズを指定（例：100MB、4K、10g）
+      --dummyOutput  ダミー出力モード
+```
+
+
+Sendモードの使用方法
+-------------------
+
+```
+Usage:
+  rcp send [flags]
+
+Flags:
+  -d、--dialAddr    文字列ダイヤルアドレス（例：198.51.100.1:1987）
+  -h、--help        ヘルプ
+  -i、--input       string入力ファイル名
+
+Global Flags:
+      --bufSize      バッファサイズ（デフォルト 10485760）
+      --maxBufNum    バッファーの最大数（デフォルト100）
+      --dummyInput   文字列ダミー入力モードのデータサイズを指定（例：100MB、4K、10g）
+      --dummyOutput  ダミー出力モード
+```
+
+
+
 使用例
 -----
 
